@@ -25,7 +25,7 @@ class Message(BaseModel):
 
 
 app = FastAPI()
-# app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/", StaticFiles(directory="static",  html=True), name="static")
 
 app.add_middleware(
     CORSMiddleware,
