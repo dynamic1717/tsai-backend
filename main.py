@@ -1,5 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel, BaseSettings
 import spacy
 from spacy.matcher import PhraseMatcher
@@ -24,8 +27,10 @@ class Message(BaseModel):
     message: str
 
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
-# app.mount("/", StaticFiles(directory="static",  html=True), name="static")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,9 +49,10 @@ async def hello():
 
 
 @app.post('/api/chat')
-async def index(request: Message):
+@limiter.limit('5/minute')
+async def chat(request: Request, body: Message):
 
-    number_of_tokens = calculate_tokens(request.message)
+    number_of_tokens = calculate_tokens(body.message)
 
     if number_of_tokens > 50:
         raise HTTPException(
@@ -56,7 +62,7 @@ async def index(request: Message):
         model='gpt-3.5-turbo',
         messages=[
             {"role": "system", "content": "You are not a very useful assistant who floods with names, numbers, dates. Start your response with: As an AI language model"},
-            {"role": "user", "content": request.message}
+            {"role": "user", "content": body.message}
         ],
         temperature=0.5,
         max_tokens=100
